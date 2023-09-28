@@ -1,0 +1,210 @@
+---
+title: "Demo For E-Learning Design"
+author: "Ashish Gurung"
+date: "2023-09-28"
+output: html_document
+---
+
+```{r}
+# library(irr)
+library(psych)
+library(ggpubr)
+library(broom)
+```
+
+GOAL: Start with the simple stuff. Once you have that you can build on your findings and do more complex analysis.
+
+What is inter-rater reliability? 
+- Helps establish consistency/agreement.
+- Binary Classification
+Between Subjects (n=2): Cohen's Kappa
+Between Subjects (n>=2): Fleiss' Kappa
+
+```{r}
+rater1 <- rbinom(400, 1, 0.50)
+hist(rater1)
+
+rater1_ <- rbinom(400, 1, 0.50)
+hist(rater1)
+
+cohen.kappa(x=cbind(rater1, rater1_))
+```
+
+```{r}
+df_irr <- data.frame(rater1)
+df_irr$rater2 <- df_irr$rater1
+
+cohen.kappa(x=cbind(df_irr$rater1, df_irr$rater2))
+```
+
+```{r}
+df_irr$rater3 <- df_irr$rater1
+table(df_irr$rater3)
+df_irr$rater3 <- df_irr$rater3 - 1
+table(df_irr$rater3)
+df_irr[df_irr$rater3 < 0, ]$rater3 <- 1
+table(df_irr$rater3)
+cohen.kappa(x=cbind(df_irr$rater1, df_irr$rater3))
+```
+
+```{r}
+df_irr$rater4 <- df_irr$rater1
+
+indices <- sample(1:400, 40, replace=FALSE)
+
+table(df_irr$rater4)
+df_irr[indices, ]$rater4 <- df_irr[indices, ]$rater4 - 1
+table(df_irr$rater4)
+df_irr[df_irr$rater4 < 0, ]$rater4 <- 1
+table(df_irr$rater4)
+
+cohen.kappa(x=cbind(df_irr$rater1, df_irr$rater4))
+```
+
+- What if the classification is not binary?
+- What does the weighted kappa mean?
+  -linear vs quadratic
+  https://scikit-learn.org/stable/modules/generated/sklearn.metrics.cohen_kappa_score.html
+  
+
+
+Next we talk about randomization.
+
+```{r}
+mean_of_means = 0
+for (i in 1:10) {
+  random_sample <- sample(1:10000, 10, replace=TRUE)
+  sample_mean <- mean(random_sample)
+  print(sample_mean)
+  mean_of_means = mean_of_means + sample_mean
+}
+print(mean_of_means/10)
+
+for (i in 1:10) {
+  print(mean(sample(1:10000, 100, replace=TRUE)))
+}
+```
+
+Why do experiments randomize?
+- Remove _____
+- selection effect
+
+DRAW a flow network as to how bias is mitigated.
+
+
+Intuition Check:
+Introduce factorial design.
+How many factors are there in a (2 X 2) design?
+How many factors are there in a (2 X 3) design?
+How many factors are there in a (3 X 3) design?
+How many factors are there in a (2 X 2 X 2) design?
+
+....
+
+let's use a classical example:
+What is more important for plants: 
+  water or sunlight?
+  
+  
+                 Sunlight 
+           ------------------
+           |    0   |   1   |
+      -----------------------
+Water | 0  |  00    |  01   |
+      -----------------------
+      | 1  |  10    |  11   |
+      -----------------------
+
+What are the two factors here?
+
+```{r}
+col_00 <- rnorm(400, mean = 20, sd=5)
+col_01 <- rnorm(400, mean = 30, sd=8)
+col_10 <- rnorm(400, mean = 24, sd=6)
+col_11 <- rnorm(400, mean = 50, sd=12)
+
+df_00 <- data.frame(height = col_00, water = "no_water", sun = "no_sunlight")
+df_01 <- data.frame(height = col_01, water = "no_water", sun = "sunlight")
+df_10 <- data.frame(height = col_10, water = "water", sun = "no_sunlight")
+df_11 <- data.frame(height = col_11, water = "water", sun = "sunlight")
+df_main <- rbind(df_00, df_01, df_10, df_11)
+table(df_main$water, df_main$sun)
+head(df_main)
+
+```
+
+let us develop some intuition regarding the data
+
+```{r}
+ggboxplot(df_main, x='water', y='height', color='sun', palette = c("#00AFBB", "#E7B800"))
+```
+
+```{r}
+ggboxplot(df_main, x='sun', y='height', color='water', palette = c("#00AFBB", "#E7B800"))
+```
+
+let's do a t-test for main effects:
+water:
+```{r}
+t.test(df_main[df_main$water == 'no_water',]$height, df_main[df_main$water == 'water',]$height, alternative = "two.sided", var.equal = FALSE)
+```
+
+sunlight:
+```{r}
+t.test(df_main[df_main$sun == 'no_sunlight',]$height, df_main[df_main$sun == 'sunlight',]$height, alternative = "two.sided", var.equal = FALSE)
+```
+
+```{r}
+two_factor_anova <- aov( height ~ sun + water, data = df_main)
+summary(two_factor_anova)
+```
+
+```{r}
+model.tables(two_factor_anova, type = "means", se=TRUE)
+```
+
+
+```{r}
+tidy(TukeyHSD(two_factor_anova))
+```
+
+let's also explore sub-effects:
+```{r}
+two_factor_anova_interaction <- aov( height ~ sun + water + sun:water, data = df_main)
+summary(two_factor_anova_interaction)
+```
+
+What does this tell us?
+- The main effect of exposure to sunlight is significant 
+- The main effect of exposure to water is significant 
+- the effect of sunlight varies with the effect of water and vice-versa
+
+```{r}
+model.tables(two_factor_anova_interaction, type = "means", se=TRUE)
+```
+
+```{r}
+tidy(TukeyHSD(two_factor_anova_interaction))
+```
+
+Bonus Points:
+```{r}
+# what if you knew the average height of the parent tree of the sapling
+# conduct a ANCOVA
+
+aov(height ~ sun + water + sun:water + parent_tree_height, data = df_main)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
